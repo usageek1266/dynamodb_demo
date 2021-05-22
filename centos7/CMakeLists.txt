@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.17)
+project(dynamodbtest)
+set(CMAKE_CXX_STANDARD 14)
+find_package(GTest CONFIG REQUIRED)
+find_package(AWSSDK CONFIG COMPONENTS core dynamodb REQUIRED)
+add_executable(dynamodbtest main.cpp)
+target_link_libraries(dynamodbtest ${AWSSDK_LINK_LIBRARIES} GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main)

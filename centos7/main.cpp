@@ -1,9 +1,12 @@
 #include <aws/core/Aws.h>
+#include <aws/core/utils/logging/DefaultLogSystem.h>
 #include <aws/core/utils/logging/ConsoleLogSystem.h>
 #include <aws/core/utils/logging/AWSLogging.h>
 #include <aws/core/utils/json/JsonSerializer.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/utils/Outcome.h>
+
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/AttributeDefinition.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
@@ -13,36 +16,38 @@
 #include <aws/dynamodb/model/PutItemResult.h>
 #include <aws/dynamodb/model/DeleteItemRequest.h>
 #include <aws/dynamodb/model/ScanRequest.h>
+#include <aws/dynamodb/model/QueryRequest.h>
 #include <aws/dynamodb/model/CreateTableRequest.h>
-#include <aws/dynamodb/model/DeleteTableRequest.h>
-
 #include <gtest/gtest.h>
 
 using namespace Aws::DynamoDB::Model;
 using namespace Aws::Utils::Json;
 
 class FooTest : public ::testing::Test {
+
 protected:
-  std::unique_ptr<Aws::DynamoDB::DynamoDBClient> dynamodb;
+  Aws::DynamoDB::DynamoDBClient * dynamodbclient;
   Aws::SDKOptions options;
+
   FooTest() {}
   virtual ~FooTest() {}
+
   virtual void SetUp() {
     Aws::InitAPI(options);
-    setenv("AWS_EC2_METADATA_DISABLED", "true", 1);
     Aws::Client::ClientConfiguration dynamodb_clientConfig;
     dynamodb_clientConfig.endpointOverride = "127.0.0.1:7000";
     dynamodb_clientConfig.scheme = Aws::Http::Scheme::HTTP;
-    dynamodb_clientConfig.region = Aws::String("us-west-1");
-    dynamodb = std::make_unique<Aws::DynamoDB::DynamoDBClient>(Aws::Auth::AWSCredentials("fakeMyKeyId", "fakeSecretAccessKey"), dynamodb_clientConfig);
+//    dynamodb_clientConfig.region = Aws::String("us-east-1");
+    dynamodbclient = new Aws::DynamoDB::DynamoDBClient(Aws::Auth::AWSCredentials("fakeMyKeyId", "fakeSecretAccessKey"), dynamodb_clientConfig);
   }
   virtual void TearDown() {
     Aws::ShutdownAPI(options);
+    delete dynamodbclient;
   }
 };
 
 TEST_F(FooTest, createt) {
-  if(dynamodb) {
+  if(dynamodbclient) {
     Aws::DynamoDB::Model::CreateTableRequest req;
     Aws::DynamoDB::Model::AttributeDefinition haskKey;
     haskKey.SetAttributeName("Name");
@@ -57,7 +62,7 @@ TEST_F(FooTest, createt) {
     thruput.WithReadCapacityUnits(5).WithWriteCapacityUnits(5);
     req.SetProvisionedThroughput(thruput);
     req.SetTableName("table1");
-    const Aws::DynamoDB::Model::CreateTableOutcome& result = dynamodb->CreateTable(req);
+    const Aws::DynamoDB::Model::CreateTableOutcome& result = dynamodbclient->CreateTable(req);
     if (result.IsSuccess())
     {
       std::cout << "Table \"" << result.GetResult().GetTableDescription().GetTableName() <<
@@ -70,25 +75,10 @@ TEST_F(FooTest, createt) {
   }
 }
 
-TEST_F(FooTest, deletet) {
-  if(dynamodb) {
-    Aws::DynamoDB::Model::DeleteTableRequest req;
-    req.WithTableName("table1");
-    const Aws::DynamoDB::Model::DeleteTableOutcome & result = dynamodb->DeleteTable(req);
-    if (result.IsSuccess())
-    {
-      std::cout << "Table \"" << result.GetResult().GetTableDescription().GetTableName() <<
-                " deleted!" << std::endl;
-    }
-    else
-    {
-      std::cout << "Failed to delete table: " << result.GetError().GetMessage();
-    }
-  }
-}
-
 int main(int argc, char **argv) {
-  Aws::Utils::Logging::InitializeAWSLogging(Aws::MakeShared<Aws::Utils::Logging::ConsoleLogSystem>("RunUnitTests", Aws::Utils::Logging::LogLevel::Debug));
+  Aws::Utils::Logging::InitializeAWSLogging(
+    Aws::MakeShared<Aws::Utils::Logging::ConsoleLogSystem>(
+      "RunUnitTests", Aws::Utils::Logging::LogLevel::Debug));
   testing::InitGoogleTest(&argc, argv);
   int exitCode = RUN_ALL_TESTS();
   Aws::Utils::Logging::ShutdownAWSLogging();
